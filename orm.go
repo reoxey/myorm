@@ -17,7 +17,7 @@ type env struct{
 type Handler interface {
 	Model(interface{}) error
 	InsertOne(interface{}) error
-	InsertAll([]interface{}) error
+	InsertAll(interface{}) error
 	Find(interface{}) Where
 }
 
@@ -90,12 +90,12 @@ func (ev env) Model(in interface{}) error {
 
 	fmt.Println(ddl)
 
-	_, e = conn.Exec(ddl)
+	x, e := conn.Exec(ddl)
 	if e != nil {
 		return e
 	}
 
-	if len(idx) > 0 {
+	if x.Warnings == 0 && len(idx) > 0 {
 		ddl = "ALTER TABLE `"+t.Name()+"` ADD INDEX ("+strings.Join(idx, ",")+");"
 		fmt.Println(ddl)
 		_, e = conn.Exec(ddl)
@@ -111,19 +111,67 @@ func  (ev env) InsertOne(in interface{}) error {
 	}
 	defer ev.db.PutConn(conn)
 
+	t := reflect.TypeOf(in)
+	v := reflect.ValueOf(in)
+
+	lot := set(t, v)
+
+	dml := "INSERT INTO `"+t.Name()+"` SET "+strings.Join(lot, ",")
+
+	fmt.Println(dml)
+
+	_, e = conn.Exec(dml)
 
 	return e
 }
 
-func  (ev env) InsertAll(arr []interface{}) error {
+func set(t reflect.Type, v reflect.Value) []string {
+
+	var lot []string
+
+	for i := 0; i < t.NumField(); i++ {
+		val := ""
+		switch t.Field(i).Type.Name() {
+		case "int": val = strconv.Itoa(int(v.Field(i).Int()))
+		case "float32": val = strconv.FormatFloat(v.Field(i).Float(),'f',-1,32)
+		case "float64": val = strconv.FormatFloat(v.Field(i).Float(),'f',-1,64)
+		case "string": val = v.Field(i).String()
+			if val == "" {
+				continue
+			}
+		}
+		lot = append(lot, t.Field(i).Name+"='"+val+"'")
+	}
+
+	return lot
+}
+
+func  (ev env) InsertAll(arr interface{}) error {
 	conn, e := ev.db.GetConn()
 	if e != nil {
 		return e
 	}
 	defer ev.db.PutConn(conn)
 
+	s := reflect.ValueOf(arr)
+	for i := 0; i < s.Len(); i++ {
 
-	return e
+		t := reflect.TypeOf(s.Index(i).Interface())
+		v := reflect.ValueOf(s.Index(i).Interface())
+
+		lot := set(t, v)
+
+		dml := "INSERT INTO `"+t.Name()+"` SET "+strings.Join(lot, ",")
+
+		fmt.Println(dml)
+
+		_, e = conn.Exec(dml)
+		if e != nil {
+			return e
+		}
+	}
+
+	return nil
 }
 
 
@@ -131,13 +179,15 @@ func  (ev env) Find(in interface{}) Where {
 	conn, _ := ev.db.GetConn()
 	defer ev.db.PutConn(conn)
 
+	w := condition{db: ev.db}
+	w.store = reflect.TypeOf(in)
 
-	return nil
+	return w
 }
 
 type condition struct {
 	where string
-	data interface{}
+	store reflect.Type
 	db *mysqldriver.DB
 }
 
@@ -149,7 +199,6 @@ type Where interface {
 
 var _ Where = (*condition) (nil)
 
-
 func  (w condition) ByID(id interface{}) error {
 	conn, e := w.db.GetConn()
 	if e != nil {
@@ -158,15 +207,9 @@ func  (w condition) ByID(id interface{}) error {
 	defer w.db.PutConn(conn)
 
 	var idx string
-	switch id.(type) {
-	case int:
-		if i, ok := id.(int); ok {
-			idx = strconv.Itoa(i)
-		}
-	case string:
-		if s, ok := id.(int); ok {
-			idx = strconv.Itoa(s)
-		}
+	switch id := id.(type) {
+	case int: idx = strconv.Itoa(id)
+	case string: idx = id
 	default:
 		return ErrInvalidID
 	}
