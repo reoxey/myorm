@@ -1,0 +1,4 @@
+github.com/pubnative/mysqldriver-go v0.0.0-20200818080606-31336c0885b9 h1:ugkzdoYAB661mfHOBLn0MxgTKWRtPr1eGIJ2YLfrXks=
+github.com/pubnative/mysqldriver-go v0.0.0-20200818080606-31336c0885b9/go.mod h1:qZWyRxIU6rfShLd0RAwmaIR4c6QqdaekuKvG7ZqHCpM=
+github.com/pubnative/mysqlproto-go v0.0.0-20200415131125-7cc4fee17a03 h1:8YgyLfYMEmA/veAMVHSPiIIhuzXidqar2x8mqJu1pfg=
+github.com/pubnative/mysqlproto-go v0.0.0-20200415131125-7cc4fee17a03/go.mod h1:EkYeyidYo/h7JiKEnmDnJBbVJ1SIP25B/bWNlmZei+M=
