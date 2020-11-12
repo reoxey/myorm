@@ -18,13 +18,16 @@ type Handler interface {
 	Model(interface{}) error
 	InsertOne(interface{}) error
 	InsertAll(interface{}) error
-	Find(interface{}) Where
+	Find(interface{}, []string) Where
 }
 
 var _ Handler = (*env) (nil)
 
 var (
-	ErrInvalidID = errors.New("myorm: invalid or nil id")
+	ErrInvalidID   = errors.New("myorm: invalid or nil id")
+	ErrNoPrimaryID = errors.New("myorm: no primary key found")
+	ErrInvalidTYPE = errors.New("myorm: invalid struct type")
+	ErrRequiredPTR = errors.New("myorm: required struct pointer in Find")
 )
 
 func Dial(dsn string, pool int) Handler {
@@ -174,21 +177,25 @@ func  (ev env) InsertAll(arr interface{}) error {
 	return nil
 }
 
-
-func  (ev env) Find(in interface{}) Where {
+func (ev env) Find(in interface{}, attr []string) Where {
 	conn, _ := ev.db.GetConn()
 	defer ev.db.PutConn(conn)
 
 	w := condition{db: ev.db}
-	w.store = reflect.TypeOf(in)
+	w.rType = reflect.TypeOf(in)
+	w.rVal = reflect.ValueOf(in)
+
+	w.attr = attr
 
 	return w
 }
 
 type condition struct {
 	where string
-	store reflect.Type
-	db *mysqldriver.DB
+	attr  []string
+	rType reflect.Type
+	rVal  reflect.Value
+	db    *mysqldriver.DB
 }
 
 type Where interface {
@@ -200,6 +207,11 @@ type Where interface {
 var _ Where = (*condition) (nil)
 
 func  (w condition) ByID(id interface{}) error {
+
+	if w.rVal.Kind() != reflect.Ptr {
+		return ErrRequiredPTR
+	}
+
 	conn, e := w.db.GetConn()
 	if e != nil {
 		return e
@@ -208,8 +220,10 @@ func  (w condition) ByID(id interface{}) error {
 
 	var idx string
 	switch id := id.(type) {
-	case int: idx = strconv.Itoa(id)
-	case string: idx = id
+	case int:
+		idx = strconv.Itoa(id)
+	case string:
+		idx = id
 	default:
 		return ErrInvalidID
 	}
@@ -218,7 +232,69 @@ func  (w condition) ByID(id interface{}) error {
 		return ErrInvalidID
 	}
 
+	var pri string
+	var fields []string
+	for i := 0; i < reflect.Indirect(w.rVal).NumField(); i++ {
 
+		fields = append(fields, w.rType.Elem().Field(i).Name)
+
+		if v, ok := w.rType.Elem().Field(i).Tag.Lookup("myorm"); ok {
+			if strings.Contains(v, "primary") {
+				pri = w.rType.Elem().Field(i).Name
+			}
+		}
+	}
+
+	var attr string
+	if w.attr != nil {
+		attr = strings.Join(w.attr, ",")
+		fields = w.attr
+	} else {
+		attr = strings.Join(fields, ",")
+	}
+
+	if pri == "" {
+		return ErrNoPrimaryID
+	}
+
+	s := "SELECT " + attr + " FROM `" + w.rType.Elem().Name() + "` WHERE " + pri + " = " + idx
+
+	fmt.Println(s)
+
+	row, e := conn.Query(s)
+	if e != nil {
+		return e
+	}
+
+	for row.Next() {
+		for i := 0; i < len(fields); i++ {
+			if fields[i] == w.rType.Elem().Field(i).Name {
+
+				switch w.rType.Elem().Field(i).Type.Name() {
+				case "string":
+					w.rVal.Elem().Field(i).SetString(row.String())
+				case "int":
+					fallthrough
+				case "int8":
+					fallthrough
+				case "int16":
+					fallthrough
+				case "int32":
+					fallthrough
+				case "int64":
+					w.rVal.Elem().Field(i).SetInt(row.Int64())
+				case "float32":
+					fallthrough
+				case "float64":
+					w.rVal.Elem().Field(i).SetFloat(row.Float64())
+				case "bool":
+					w.rVal.Elem().Field(i).SetBool(row.Bool())
+				default:
+					return ErrInvalidTYPE
+				}
+			}
+		}
+	}
 
 	return e
 }
