@@ -32,6 +32,7 @@ var (
 	ErrRequiredPTR = errors.New("myorm: required pointer to struct in FindByID")
 	ErrInvalidPTR  = errors.New("myorm: required struct, pointer found in Find")
 	ErrEmptyMap    = errors.New("myorm: empty map is send in Find")
+	ErrEmptyWhere  = errors.New("myorm: empty where string is send in Find")
 )
 
 func Dial(dsn string, pool int) Handler {

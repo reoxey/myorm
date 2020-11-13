@@ -1,43 +1,12 @@
 package myorm
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/pubnative/mysqldriver-go"
 )
-
-func (ev env) Find(in interface{}, attr []string) Where {
-	conn, _ := ev.db.GetConn()
-	defer ev.db.PutConn(conn)
-
-	w := condition{db: ev.db}
-	w.rType = reflect.TypeOf(in)
-	w.rVal = reflect.ValueOf(in)
-
-	w.attr = attr
-
-	return w
-}
-
-type condition struct {
-	where  string
-	attr   []string
-	fields []string
-	rType  reflect.Type
-	rVal   reflect.Value
-	db     *mysqldriver.DB
-}
-
-type Where interface {
-	//ByEq(map[string]interface{}) error
-	All() ([]interface{}, error)
-}
-
-var _ Where = (*condition)(nil)
-
 
 func (ev env) FindByID(in, id interface{}) error {
 
@@ -107,6 +76,37 @@ func (ev env) FindOne(in interface{}, and map[string]interface{}) error {
 	return ev.load(typ, val, s, fields)
 }
 
+func (ev env) Find(in interface{}, attr []string) Where {
+	conn, _ := ev.db.GetConn()
+	defer ev.db.PutConn(conn)
+
+	w := condition{db: ev.db}
+	w.rType = reflect.TypeOf(in)
+	w.rVal = reflect.ValueOf(in)
+
+	w.attr = attr
+
+	return w
+}
+
+type condition struct {
+	attr   []string
+	fields []string
+	rType  reflect.Type
+	rVal   reflect.Value
+	db     *mysqldriver.DB
+}
+
+type Where interface {
+	ByEqAnd(map[string]interface{}) ([]interface{}, error)
+	ByEqOr(map[string]interface{}) ([]interface{}, error)
+	ByWhere(string) ([]interface{}, error)
+	All() ([]interface{}, error)
+	load(rows *mysqldriver.Rows) ([]interface{}, error)
+}
+
+var _ Where = (*condition)(nil)
+
 func (w condition) All() ([]interface{}, error) {
 
 	if w.rVal.Kind() == reflect.Ptr {
@@ -121,8 +121,6 @@ func (w condition) All() ([]interface{}, error) {
 
 	attr := w.list().attributes()
 
-	fmt.Println(w.fields)
-
 	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "`"
 
 	row, e := conn.Query(s)
@@ -130,6 +128,132 @@ func (w condition) All() ([]interface{}, error) {
 		return nil, e
 	}
 
+	return w.load(row)
+}
+
+func (w condition) ByWhere(where string) ([]interface{}, error) {
+
+	if w.rVal.Kind() == reflect.Ptr {
+		return nil, ErrInvalidPTR
+	}
+
+	conn, e := w.db.GetConn()
+	if e != nil {
+		return nil, e
+	}
+	defer w.db.PutConn(conn)
+
+	if len(where) == 0 {
+		return nil, ErrEmptyWhere
+	}
+
+	attr := w.list().attributes()
+
+	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "` WHERE " + where
+
+	row, e := conn.Query(s)
+	if e != nil {
+		return nil, e
+	}
+
+	return w.load(row)
+}
+
+func (w condition) ByEqAnd(and map[string]interface{}) ([]interface{}, error) {
+
+	if w.rVal.Kind() == reflect.Ptr {
+		return nil, ErrInvalidPTR
+	}
+
+	conn, e := w.db.GetConn()
+	if e != nil {
+		return nil, e
+	}
+	defer w.db.PutConn(conn)
+
+	if len(and) == 0 {
+		return nil, ErrEmptyMap
+	}
+
+	attr := w.list().attributes()
+
+	var where []string
+	for k, v := range and {
+		where = append(where, k+" = '"+cast(v)+"'")
+	}
+
+	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "` WHERE " + strings.Join(where, " AND ")
+
+	row, e := conn.Query(s)
+	if e != nil {
+		return nil, e
+	}
+
+	return w.load(row)
+}
+
+func (w condition) ByEqOr(and map[string]interface{}) ([]interface{}, error) {
+
+	if w.rVal.Kind() == reflect.Ptr {
+		return nil, ErrInvalidPTR
+	}
+
+	conn, e := w.db.GetConn()
+	if e != nil {
+		return nil, e
+	}
+	defer w.db.PutConn(conn)
+
+	if len(and) == 0 {
+		return nil, ErrEmptyMap
+	}
+
+	attr := w.list().attributes()
+
+	var where []string
+	for k, v := range and {
+		where = append(where, k+" = '"+cast(v)+"'")
+	}
+
+	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "` WHERE " + strings.Join(where, " OR ")
+
+	row, e := conn.Query(s)
+	if e != nil {
+		return nil, e
+	}
+
+	return w.load(row)
+}
+
+func (w *condition) list() *condition {
+	for i := 0; i < w.rType.NumField(); i++ {
+		w.fields = append(w.fields, w.rType.Field(i).Name)
+	}
+	return w
+}
+
+func (w *condition) attributes() (a string) {
+	if w.attr != nil {
+		a = strings.Join(w.attr, ",")
+		w.fields = w.attr
+	} else {
+		a = strings.Join(w.fields, ",")
+	}
+	return a
+}
+
+func cast(id interface{}) string {
+	var idx string
+	switch id := id.(type) {
+	case int:
+		idx = strconv.Itoa(id)
+	case string:
+		idx = id
+	}
+	return idx
+}
+
+func (w condition) load(row *mysqldriver.Rows) ([]interface{}, error) {
 	var stack []interface{}
 
 	for row.Next() {
@@ -164,34 +288,6 @@ func (w condition) All() ([]interface{}, error) {
 	}
 
 	return stack, nil
-}
-
-func (w *condition) list() *condition {
-	for i := 0; i < w.rType.NumField(); i++ {
-		w.fields = append(w.fields, w.rType.Field(i).Name)
-	}
-	return w
-}
-
-func (w *condition) attributes() (a string) {
-	if w.attr != nil {
-		a = strings.Join(w.attr, ",")
-		w.fields = w.attr
-	} else {
-		a = strings.Join(w.fields, ",")
-	}
-	return a
-}
-
-func cast(id interface{}) string {
-	var idx string
-	switch id := id.(type) {
-	case int:
-		idx = strconv.Itoa(id)
-	case string:
-		idx = id
-	}
-	return idx
 }
 
 func (ev env) load(typ reflect.Type, val reflect.Value, s string, f []string) error {
