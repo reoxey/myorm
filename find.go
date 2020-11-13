@@ -38,6 +38,7 @@ type Where interface {
 
 var _ Where = (*condition)(nil)
 
+
 func (ev env) FindByID(in, id interface{}) error {
 
 	typ := reflect.TypeOf(in)
@@ -47,22 +48,7 @@ func (ev env) FindByID(in, id interface{}) error {
 		return ErrRequiredPTR
 	}
 
-	conn, e := ev.db.GetConn()
-	if e != nil {
-		return e
-	}
-	defer ev.db.PutConn(conn)
-
-	var idx string
-	switch id := id.(type) {
-	case int:
-		idx = strconv.Itoa(id)
-	case string:
-		idx = id
-	default:
-		return ErrInvalidID
-	}
-
+	idx := cast(id)
 	if idx == "" {
 		return ErrInvalidID
 	}
@@ -89,46 +75,36 @@ func (ev env) FindByID(in, id interface{}) error {
 
 	s := "SELECT " + attr + " FROM `" + typ.Elem().Name() + "` WHERE " + pri + " = " + idx
 
-	row, e := conn.Query(s)
-	if e != nil {
-		return e
+	return ev.load(typ, val, s, fields)
+}
+
+func (ev env) FindOne(in interface{}, and map[string]interface{}) error {
+
+	typ := reflect.TypeOf(in)
+	val := reflect.ValueOf(in)
+
+	if val.Kind() != reflect.Ptr {
+		return ErrRequiredPTR
+	}
+	if len(and) == 0 {
+		return ErrEmptyMap
 	}
 
-	for row.Next() {
-		for i := 0; i < len(fields); i++ {
-
-			t := typ.Elem().Field(i)
-			v := val.Elem().Field(i)
-
-			if fields[i] == t.Name {
-
-				switch t.Type.Name() {
-				case "string":
-					v.SetString(row.String())
-				case "int":
-					fallthrough
-				case "int8":
-					fallthrough
-				case "int16":
-					fallthrough
-				case "int32":
-					fallthrough
-				case "int64":
-					v.SetInt(row.Int64())
-				case "float32":
-					fallthrough
-				case "float64":
-					v.SetFloat(row.Float64())
-				case "bool":
-					v.SetBool(row.Bool())
-				default:
-					return ErrInvalidTYPE
-				}
-			}
-		}
+	var where []string
+	for k, v := range and {
+		where = append(where, k+" = '"+cast(v)+"'")
 	}
 
-	return nil
+	var fields []string
+	for i := 0; i < reflect.Indirect(val).NumField(); i++ {
+		fields = append(fields, typ.Elem().Field(i).Name)
+	}
+
+	attr := strings.Join(fields, ",")
+
+	s := "SELECT " + attr + " FROM `" + typ.Elem().Name() + "` WHERE " + strings.Join(where, " AND ")
+
+	return ev.load(typ, val, s, fields)
 }
 
 func (w condition) All() ([]interface{}, error) {
@@ -205,4 +181,65 @@ func (w *condition) attributes() (a string) {
 		a = strings.Join(w.fields, ",")
 	}
 	return a
+}
+
+func cast(id interface{}) string {
+	var idx string
+	switch id := id.(type) {
+	case int:
+		idx = strconv.Itoa(id)
+	case string:
+		idx = id
+	}
+	return idx
+}
+
+func (ev env) load(typ reflect.Type, val reflect.Value, s string, f []string) error {
+
+	conn, e := ev.db.GetConn()
+	if e != nil {
+		return e
+	}
+	defer ev.db.PutConn(conn)
+
+	row, e := conn.Query(s)
+	if e != nil {
+		return e
+	}
+
+	for row.Next() {
+		for i := 0; i < len(f); i++ {
+
+			t := typ.Elem().Field(i)
+			v := val.Elem().Field(i)
+
+			if f[i] == t.Name {
+
+				switch t.Type.Name() {
+				case "string":
+					v.SetString(row.String())
+				case "int":
+					fallthrough
+				case "int8":
+					fallthrough
+				case "int16":
+					fallthrough
+				case "int32":
+					fallthrough
+				case "int64":
+					v.SetInt(row.Int64())
+				case "float32":
+					fallthrough
+				case "float64":
+					v.SetFloat(row.Float64())
+				case "bool":
+					v.SetBool(row.Bool())
+				default:
+					return ErrInvalidTYPE
+				}
+			}
+		}
+	}
+
+	return nil
 }

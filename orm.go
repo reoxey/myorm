@@ -18,7 +18,9 @@ type Handler interface {
 	InsertOne(interface{}) error
 	InsertAll(interface{}) error
 	FindByID(interface{}, interface{}) error
+	FindOne(interface{}, map[string]interface{}) error
 	Find(interface{}, []string) Where
+	load(reflect.Type, reflect.Value, string, []string) error
 }
 
 var _ Handler = (*env) (nil)
@@ -29,6 +31,7 @@ var (
 	ErrInvalidTYPE = errors.New("myorm: invalid struct type")
 	ErrRequiredPTR = errors.New("myorm: required pointer to struct in FindByID")
 	ErrInvalidPTR  = errors.New("myorm: required struct, pointer found in Find")
+	ErrEmptyMap    = errors.New("myorm: empty map is send in Find")
 )
 
 func Dial(dsn string, pool int) Handler {
