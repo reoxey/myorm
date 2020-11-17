@@ -28,6 +28,10 @@ type Handler interface {
 	UpdateByID(interface{}) (bool, error)
 	UpdateAnd(interface{}, map[string]interface{}) (bool, error)
 	UpdateOr(interface{}, map[string]interface{}) (bool, error)
+
+	DeleteByID(interface{}) (bool, error)
+	DeleteAnd(interface{}) (bool, error)
+	DeleteOr(interface{}) (bool, error)
 }
 
 var _ Handler = (*env) (nil)
@@ -136,4 +140,18 @@ func cast(id interface{}) string {
 		idx = id
 	}
 	return idx
+}
+
+func fields(typ reflect.Type, val reflect.Value) []string {
+	var (
+		fields []string
+	)
+	for i := 0; i < val.NumField(); i++ {
+		if !reflect.DeepEqual(val.Field(i).Interface(), reflect.Zero(val.Field(i).Type()).Interface()) {
+			v := value(val.Field(i))
+			fields = append(fields, typ.Field(i).Name+"='"+v+"'")
+		}
+	}
+
+	return fields
 }
