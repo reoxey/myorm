@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/pubnative/mysqldriver-go"
@@ -14,13 +15,19 @@ type env struct{
 }
 
 type Handler interface {
-	Model(interface{}) error
+	Create(interface{}) error
+
 	InsertOne(interface{}) error
 	InsertAll(interface{}) error
+
 	FindByID(interface{}, interface{}) error
 	FindOne(interface{}, map[string]interface{}) error
 	Find(interface{}, []string) Where
 	load(reflect.Type, reflect.Value, string, []string) error
+
+	UpdateByID(interface{}) (bool, error)
+	UpdateAnd(interface{}, map[string]interface{}) (bool, error)
+	UpdateOr(interface{}, map[string]interface{}) (bool, error)
 }
 
 var _ Handler = (*env) (nil)
@@ -41,7 +48,7 @@ func Dial(dsn string, pool int) Handler {
 	}
 }
 
-func (ev env) Model(in interface{}) error {
+func (ev env) Create(in interface{}) error {
 
 	conn, e := ev.db.GetConn()
 	if e != nil {
@@ -104,10 +111,29 @@ func (ev env) Model(in interface{}) error {
 	}
 
 	if x.Warnings == 0 && len(idx) > 0 {
-		ddl = "ALTER TABLE `"+t.Name()+"` ADD INDEX ("+strings.Join(idx, ",")+");"
+		ddl = "ALTER TABLE `" + t.Name() + "` ADD INDEX (" + strings.Join(idx, ",") + ");"
 		fmt.Println(ddl)
 		_, e = conn.Exec(ddl)
 	}
 
 	return e
+}
+
+func joinMap(m map[string]interface{}, k string) string {
+	var where []string
+	for k, v := range m {
+		where = append(where, k+" = '"+cast(v)+"'")
+	}
+	return strings.Join(where, " "+k+" ")
+}
+
+func cast(id interface{}) string {
+	var idx string
+	switch id := id.(type) {
+	case int:
+		idx = strconv.Itoa(id)
+	case string:
+		idx = id
+	}
+	return idx
 }

@@ -2,7 +2,6 @@ package myorm
 
 import (
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/pubnative/mysqldriver-go"
@@ -177,12 +176,7 @@ func (w condition) ByEqAnd(and map[string]interface{}) ([]interface{}, error) {
 
 	attr := w.list().attributes()
 
-	var where []string
-	for k, v := range and {
-		where = append(where, k+" = '"+cast(v)+"'")
-	}
-
-	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "` WHERE " + strings.Join(where, " AND ")
+	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "` WHERE " + joinMap(and, "AND")
 
 	row, e := conn.Query(s)
 	if e != nil {
@@ -192,7 +186,7 @@ func (w condition) ByEqAnd(and map[string]interface{}) ([]interface{}, error) {
 	return w.load(row)
 }
 
-func (w condition) ByEqOr(and map[string]interface{}) ([]interface{}, error) {
+func (w condition) ByEqOr(or map[string]interface{}) ([]interface{}, error) {
 
 	if w.rVal.Kind() == reflect.Ptr {
 		return nil, ErrInvalidPTR
@@ -204,18 +198,13 @@ func (w condition) ByEqOr(and map[string]interface{}) ([]interface{}, error) {
 	}
 	defer w.db.PutConn(conn)
 
-	if len(and) == 0 {
+	if len(or) == 0 {
 		return nil, ErrEmptyMap
 	}
 
 	attr := w.list().attributes()
 
-	var where []string
-	for k, v := range and {
-		where = append(where, k+" = '"+cast(v)+"'")
-	}
-
-	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "` WHERE " + strings.Join(where, " OR ")
+	s := "SELECT " + attr + " FROM `" + w.rType.Name() + "` WHERE " + joinMap(or, "OR")
 
 	row, e := conn.Query(s)
 	if e != nil {
@@ -240,17 +229,6 @@ func (w *condition) attributes() (a string) {
 		a = strings.Join(w.fields, ",")
 	}
 	return a
-}
-
-func cast(id interface{}) string {
-	var idx string
-	switch id := id.(type) {
-	case int:
-		idx = strconv.Itoa(id)
-	case string:
-		idx = id
-	}
-	return idx
 }
 
 func (w condition) load(row *mysqldriver.Rows) ([]interface{}, error) {
