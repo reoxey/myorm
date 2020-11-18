@@ -37,13 +37,14 @@ type Handler interface {
 var _ Handler = (*env) (nil)
 
 var (
-	ErrInvalidID   = errors.New("myorm: invalid or nil id")
-	ErrNoPrimaryID = errors.New("myorm: no primary key found")
-	ErrInvalidTYPE = errors.New("myorm: invalid struct type")
-	ErrRequiredPTR = errors.New("myorm: required pointer to struct in FindByID")
-	ErrInvalidPTR  = errors.New("myorm: required struct, pointer found in Find")
-	ErrEmptyMap    = errors.New("myorm: empty map is send in Find")
-	ErrEmptyWhere  = errors.New("myorm: empty where string is send in Find")
+	ErrInvalidID        = errors.New("myorm: invalid or nil id")
+	ErrLenInterfaceZero = errors.New("myorm: interface with slice len 0")
+	ErrNoPrimaryID      = errors.New("myorm: no primary key found")
+	ErrInvalidTYPE      = errors.New("myorm: invalid struct type")
+	ErrRequiredPTR      = errors.New("myorm: required pointer to struct in FindByID")
+	ErrInvalidPTR       = errors.New("myorm: required struct, pointer found in Find")
+	ErrEmptyMap         = errors.New("myorm: empty map is send in Find")
+	ErrEmptyWhere       = errors.New("myorm: empty where string is send in Find")
 )
 
 func Dial(dsn string, pool int) Handler {

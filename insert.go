@@ -48,6 +48,11 @@ func (ev env) InsertAll(arr interface{}) error {
 	defer ev.db.PutConn(conn)
 
 	s := reflect.ValueOf(arr)
+
+	if s.Len() == 0 {
+		return ErrLenInterfaceZero
+	}
+
 	for i := 0; i < s.Len(); i++ {
 
 		t := reflect.TypeOf(s.Index(i).Interface())
