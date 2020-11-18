@@ -2,7 +2,6 @@ package myorm
 
 import (
 	"reflect"
-	"strconv"
 	"strings"
 )
 
@@ -114,34 +113,4 @@ func (ev env) UpdateOr(in interface{}, or map[string]interface{}) (bool, error) 
 	}
 
 	return x.AffectedRows != 0, nil
-}
-
-func value(v reflect.Value) string {
-
-	switch v.Type().Name() {
-	case "string":
-		return v.String()
-	case "int8":
-		fallthrough
-	case "int16":
-		fallthrough
-	case "int32":
-		fallthrough
-	case "int64":
-		fallthrough
-	case "int":
-		return strconv.Itoa(int(v.Int()))
-	case "float32":
-		return strconv.FormatFloat(v.Float(), 'f', -1, 32)
-	case "float64":
-		return strconv.FormatFloat(v.Float(), 'f', -1, 64)
-	case "bool":
-		if v.Bool() {
-			return "1"
-		} else {
-			return "0"
-		}
-	}
-
-	return ""
 }
