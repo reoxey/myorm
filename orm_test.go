@@ -3,7 +3,7 @@ package myorm_test
 import (
 	"testing"
 
-	"myorm"
+	"github.com/reoxey/myorm"
 )
 
 type Order struct {
