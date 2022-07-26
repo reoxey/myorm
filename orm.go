@@ -10,7 +10,7 @@ import (
 	"github.com/pubnative/mysqldriver-go"
 )
 
-type env struct{
+type env struct {
 	db *mysqldriver.DB
 }
 
@@ -34,7 +34,7 @@ type Handler interface {
 	DeleteOr(interface{}) (bool, error)
 }
 
-var _ Handler = (*env) (nil)
+var _ Handler = (*env)(nil)
 
 var (
 	ErrInvalidID        = errors.New("myorm: invalid or nil id")
@@ -70,18 +70,27 @@ func (ev env) Create(in interface{}) error {
 
 		var l strings.Builder
 
-		l.WriteString("`"+t.Field(i).Name+"` ")
+		l.WriteString("`" + t.Field(i).Name + "` ")
 
 		switch t.Field(i).Type.Name() {
-		case "string": l.WriteString("TEXT ")
-		case "int": l.WriteString("INT ")
-		case "int8": l.WriteString("TINYINT ")
-		case "int16": l.WriteString("SMALLINT ")
-		case "int32": l.WriteString("MEDIUMINT ")
-		case "int64": l.WriteString("BIGINT ")
-		case "float32": l.WriteString("FLOAT ")
-		case "float64": l.WriteString("DOUBLE ")
-		case "bool": l.WriteString("TINYINT(1) ")
+		case "string":
+			l.WriteString("TEXT ")
+		case "int":
+			l.WriteString("INT ")
+		case "int8":
+			l.WriteString("TINYINT ")
+		case "int16":
+			l.WriteString("SMALLINT ")
+		case "int32":
+			l.WriteString("MEDIUMINT ")
+		case "int64":
+			l.WriteString("BIGINT ")
+		case "float32":
+			l.WriteString("FLOAT ")
+		case "float64":
+			l.WriteString("DOUBLE ")
+		case "bool":
+			l.WriteString("TINYINT(1) ")
 		default:
 			l.WriteString("VARCHAR(100) ")
 		}
@@ -90,11 +99,14 @@ func (ev env) Create(in interface{}) error {
 			s := strings.Split(x, ",")
 			for o := 0; o < len(s); o++ {
 				switch s[o] {
-				case "primary": l.WriteString("PRIMARY KEY ")
-				case "notnull": l.WriteString("NOT NULL ")
-				case "index": idx = append(idx, t.Field(i).Name)
+				case "primary":
+					l.WriteString("PRIMARY KEY ")
+				case "notnull":
+					l.WriteString("NOT NULL ")
+				case "index":
+					idx = append(idx, t.Field(i).Name)
 				default:
-					l.WriteString(strings.Replace(s[o],"=", " ",1)+" ")
+					l.WriteString(strings.Replace(s[o], "=", " ", 1) + " ")
 				}
 			}
 		} else {
@@ -104,9 +116,9 @@ func (ev env) Create(in interface{}) error {
 		lot = append(lot, l.String())
 	}
 
-	ddl := "CREATE TABLE IF NOT EXISTS `"+t.Name()+"` ("+
-		strings.Join(lot, ",")+
-		") ENGINE=InnoDB DEFAULT CHARSET=utf8 ;"
+	ddl := "CREATE TABLE IF NOT EXISTS `" + t.Name() + "` (" +
+		strings.Join(lot, ",") +
+		") ENGINE=InnoDB ;"
 
 	fmt.Println(ddl)
 
